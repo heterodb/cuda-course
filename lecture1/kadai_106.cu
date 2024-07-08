@@ -1,46 +1,63 @@
 #include <stdio.h>
 #include <stdlib.h>
-#define NITEMS		10000000
-
-__managed__ double	gpu_sum_x = 0.0;
-
-__global__ void my_gpu_average(float *x)
-{
-	int		index;
-
-	for (index = blockDim.x * blockIdx.x + threadIdx.x;
-		 index < NITEMS;
-		 index += blockDim.x * gridDim.x)
-		atomicAdd(&gpu_sum_x, x[index]);
-}
+#include <sys/time.h>
+#define NITEMS		1000000000
+#define GB_PER_SEC(nbytes,usec)										\
+	(((double)(nbytes) * 1000000.0) / ((double)(usec) * 1073741824.0))
 
 int main(int argc, char *argv[])
 {
-	float  *fval;
-	double	host_sum_x = 0.0;
-	int		my_gpu;
+	float	   *host_x;
+	float	   *host_y;
+	float	   *dev_z;
+	size_t		length = NITEMS * sizeof(float);
+	struct timeval tv1, tv2;
+	double		usec1, usec2;
 
-	// cudaMallocManaged を使用して NITEMS * sizeof(float) バイトの
-	// managed memory を割当て、fvalにそのポインタをセットする。
+	/* allocation of normal host memory */
+	gettimeofday(&tv1, NULL);
+	host_x = (float *)calloc(NITEMS, sizeof(float));
+	gettimeofday(&tv2, NULL);
+	usec1 = ((tv2.tv_sec  - tv1.tv_sec) * 1000000 +
+			 (tv2.tv_usec - tv1.tv_usec));
 
-	/* buffer initialization */
-	for (int i=0; i < NITEMS; i++)
+	/* allocation of page-locked host memory */
+	// cudaMallocHost を用いて page-locked host memory を
+	// 割り当て、その前後の時刻を gettimeofday(2) を用いて
+	// 計測する。
+	usec2 = ((tv2.tv_sec  - tv1.tv_sec) * 1000000 +
+			 (tv2.tv_usec - tv1.tv_usec));
+	printf("malloc: %.3fms, cudaMallocHost: %.3fms\n",
+		   usec1 / 1000.0,
+		   usec2 / 1000.0);
+	/* allocation of device memory */
+	cudaMalloc(&dev_z, length);
+	for (int count=0; count < 3; count++)
 	{
-		fval[i] = 100.0 * drand48();
-		host_sum_x += fval[i];
+		/* Test1: normal host memory <-> device memory */
+		gettimeofday(&tv1, NULL);
+		// 通常のホストメモリ host_x から dev_z にデータを
+		// 転送し、その直後、何もせずに dev_z から host_x に
+		// データを書き戻す。
+		// その前後の時刻を gettimeofday(2) を用いてtv1, tv2に
+		// 記録する。
+		//
+		gettimeofday(&tv2, NULL);
+		usec1 = ((tv2.tv_sec  - tv1.tv_sec) * 1000000 +
+				 (tv2.tv_usec - tv1.tv_usec));
+		/* Test2: page-locked host memory <-> device memory */
+		// page-locked メモリ host_y から dev_z にデータを
+		// 転送し、何もせずに dev_z から host_x に
+        // データを書き戻す。
+        // その前後の時刻を gettimeofday(2) を用いてtv1, tv2に
+        // 記録する。
+		//
+		usec2 = ((tv2.tv_sec  - tv1.tv_sec) * 1000000 +
+				 (tv2.tv_usec - tv1.tv_usec));
+		/* print */
+		printf("normal: %.2fGB/s [%.3fms], page-locked: %.2fGB/s [%.3fms]\n",
+			   GB_PER_SEC(length, usec1), usec1 / 1000.0,
+			   GB_PER_SEC(length, usec2), usec2 / 1000.0);
 	}
-	// GPUカーネルの起動前に、バッファ fval の内容が GPU に存在
-	// しているべきというヒントを cudaMemPrefetchAsync を用いて
-	// CUDAのランタイムに知らせる。
-	/* launch GPU kernel */
-	my_gpu_average<<<8,128>>>(fval);
-	cudaDeviceSynchronize();
-
-	/* fetch result */
-	printf("average by CPU = %f, GPU = %f\n",
-	// CPU側で集計した値（host_sum_x）と、GPU側で集計した値（gpu_sum_x）を   
-	// 利用して、平均値を計算する。
-	// gpu_sum_x の参照に際しては、cudaMemcpy() などは使用しない。		   
-		);
 	return 0;
 }
