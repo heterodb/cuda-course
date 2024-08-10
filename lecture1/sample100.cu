@@ -10,7 +10,7 @@ int main(int argc, const char *argv[])
 	{
 		cudaGetDeviceProperties(&prop, k);
 
-		printf("GPU%d name=%s uuid=%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x\n",
+		printf("GPU%d name=%s uuid=%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x CC=%d.%d\n",
 			   k, prop.name,
 			   (unsigned char)prop.uuid.bytes[0],
 			   (unsigned char)prop.uuid.bytes[1],
@@ -27,7 +27,9 @@ int main(int argc, const char *argv[])
 			   (unsigned char)prop.uuid.bytes[12],
 			   (unsigned char)prop.uuid.bytes[13],
 			   (unsigned char)prop.uuid.bytes[14],
-			   (unsigned char)prop.uuid.bytes[15]);
+			   (unsigned char)prop.uuid.bytes[15],
+			   prop.major,
+			   prop.minor);
 	}
 	return 0;
 }
