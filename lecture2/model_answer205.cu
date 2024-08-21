@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include "../my_common.h"
 
 typedef struct
 {
@@ -90,13 +91,13 @@ int main(int argc, char *argv[])
 	}
 
 	/* initialization of the device working memory */
-	cudaMemset(hash_slots, 0, sizeof(hash_slots));
+	__(cudaMemset(hash_slots, 0, sizeof(hash_slots)));
 	summary.nitems = 0;
 
 	/* grouping summary */
 	gettimeofday(&tv1, NULL);
     kern_grouping_summary<<<grid_sz, block_sz>>>();
-    cudaDeviceSynchronize();
+    __(cudaDeviceSynchronize());
 	gettimeofday(&tv2, NULL);
 
 	/* print results */

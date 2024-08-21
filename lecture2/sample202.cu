@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include "../my_common.h"
 
 __global__ static void my_kernel(void)
 {
@@ -18,6 +19,6 @@ __global__ static void my_kernel(void)
 int main(int argc, char *argv[])
 {
 	my_kernel<<<1,32>>>();
-    cudaDeviceSynchronize();
+    __(cudaDeviceSynchronize());
 	return 0;
 }

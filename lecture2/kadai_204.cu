@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include "../my_common.h"
 
 #define UNLOCK		0
 #define LOCKED		1
@@ -38,11 +39,11 @@ int main(int argc, char *argv[])
 
 	gettimeofday(&tv1, NULL);
 	tid_count_by_lock<<<10,320>>>();
-	cudaDeviceSynchronize();
+	__(cudaDeviceSynchronize());
 
 	gettimeofday(&tv2, NULL);
     tid_count_by_atomic<<<10,320>>>();
-    cudaDeviceSynchronize();
+    __(cudaDeviceSynchronize());
 
 	gettimeofday(&tv3, NULL);
 

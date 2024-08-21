@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include "../my_common.h"
 
 #define NDIMS		2000
 #define NVECS		400
@@ -72,21 +73,21 @@ int main(int argc, char *argv[])
 	int		count = 0;
 
 	/* source_vectors[] 配列をランダムな値で初期化する。 */
-	cudaMallocManaged(&source_vectors, sizeof(float) * NDIMS * NVECS);
+	__(cudaMallocManaged(&source_vectors, sizeof(float) * NDIMS * NVECS));
 	for (int i=0; i < NDIMS * NVECS; i++)
 		source_vectors[i] = drand48();
 
 	/* Global-memory上のAtomic演算によって内積を計算するGPUカーネルを起動 */
 	gettimeofday(&tv1, NULL);
-	cudaMemset(dot_product_global_results, 0, sizeof(double) * NVECS * NVECS);
+	__(cudaMemset(dot_product_global_results, 0, sizeof(double) * NVECS * NVECS));
 	dot_product_global<<<NVECS*NVECS,320>>>(source_vectors);
-	cudaDeviceSynchronize();
+	__(cudaDeviceSynchronize());
 
 	/* Shared-memory上のReduction操作によって内積を計算するGPUカーネルを起動 */
 	gettimeofday(&tv2, NULL);
-	cudaMemset(dot_product_shared_results, 0, sizeof(double) * NVECS * NVECS);
+	__(cudaMemset(dot_product_shared_results, 0, sizeof(double) * NVECS * NVECS));
 	dot_product_local<<<NVECS*NVECS,320>>>(source_vectors);
-	cudaDeviceSynchronize();
+	__(cudaDeviceSynchronize());
 
 	/* CPU上の順次計算によって内積を計算する関数を呼び出し */
 	gettimeofday(&tv3, NULL);
