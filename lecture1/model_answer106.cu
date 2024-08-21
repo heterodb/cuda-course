@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include "../my_common.h"
 #define NITEMS		1000000000
 #define GB_PER_SEC(nbytes,usec)										\
 	(((double)(nbytes) * 1000000.0) / ((double)(usec) * 1073741824.0))
@@ -23,7 +24,7 @@ int main(int argc, char *argv[])
 
 	/* allocation of page-locked host memory */
 	gettimeofday(&tv1, NULL);
-	cudaMallocHost(&host_y, length);
+	__(cudaMallocHost(&host_y, length));
 	gettimeofday(&tv2, NULL);
 	usec2 = ((tv2.tv_sec  - tv1.tv_sec) * 1000000 +
 			 (tv2.tv_usec - tv1.tv_usec));
@@ -31,27 +32,27 @@ int main(int argc, char *argv[])
 		   usec1 / 1000.0,
 		   usec2 / 1000.0);
 	/* allocation of device memory */
-	cudaMalloc(&dev_z, length);
+	__(cudaMalloc(&dev_z, length));
 	for (int count=0; count < 3; count++)
 	{
 		/* Test1: normal host memory <-> device memory */
 		gettimeofday(&tv1, NULL);
-		cudaMemcpy(dev_z, host_x, length,
-				   cudaMemcpyHostToDevice);
+		__(cudaMemcpy(dev_z, host_x, length,
+					  cudaMemcpyHostToDevice));
 		/* data transfer GPU-->CPU */
-		cudaMemcpy(host_x, dev_z, length,
-				   cudaMemcpyDeviceToHost);
+		__(cudaMemcpy(host_x, dev_z, length,
+					  cudaMemcpyDeviceToHost));
 		gettimeofday(&tv2, NULL);
 		usec1 = ((tv2.tv_sec  - tv1.tv_sec) * 1000000 +
 				 (tv2.tv_usec - tv1.tv_usec));
 
 		/* Test2: page-locked host memory <-> device memory */
 		gettimeofday(&tv1, NULL);
-		cudaMemcpy(dev_z, host_y, length,
-				   cudaMemcpyHostToDevice);
+		__(cudaMemcpy(dev_z, host_y, length,
+					  cudaMemcpyHostToDevice));
 		/* data transfer GPU-->CPU */
-		cudaMemcpy(host_y, dev_z, length,
-				   cudaMemcpyDeviceToHost);
+		__(cudaMemcpy(host_y, dev_z, length,
+					  cudaMemcpyDeviceToHost));
 		gettimeofday(&tv2, NULL);
 		usec2 = ((tv2.tv_sec  - tv1.tv_sec) * 1000000 +
 				 (tv2.tv_usec - tv1.tv_usec));

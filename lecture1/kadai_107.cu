@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include "../my_common.h"
 #define NITEMS		10000000
 
 __managed__ double	gpu_sum_x = 0.0;
@@ -34,7 +35,7 @@ int main(int argc, char *argv[])
 	// CUDAのランタイムに知らせる。
 	/* launch GPU kernel */
 	my_gpu_average<<<8,128>>>(fval);
-	cudaDeviceSynchronize();
+	__(cudaDeviceSynchronize());
 
 	/* fetch result */
 	printf("average by CPU = %f, GPU = %f\n",

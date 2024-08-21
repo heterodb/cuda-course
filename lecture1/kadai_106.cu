@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include "../my_common.h"
 #define NITEMS		1000000000
 #define GB_PER_SEC(nbytes,usec)										\
 	(((double)(nbytes) * 1000000.0) / ((double)(usec) * 1073741824.0))
@@ -31,7 +32,7 @@ int main(int argc, char *argv[])
 		   usec1 / 1000.0,
 		   usec2 / 1000.0);
 	/* allocation of device memory */
-	cudaMalloc(&dev_z, length);
+	__(cudaMalloc(&dev_z, length));
 	for (int count=0; count < 3; count++)
 	{
 		/* Test1: normal host memory <-> device memory */
