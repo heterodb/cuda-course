@@ -126,7 +126,7 @@ int main(int argc, char *argv[])
 	launch_kernel(h_buffer, g_buffer, nrooms,
 				  stream, ev1, ev2,
 				  grid_sz, block_sz);
-	for (grid_sz = 20; grid_sz < 120; grid_sz += 20)
+	for (grid_sz = 2; grid_sz < 20; grid_sz += 2)
 	{
 		for (block_sz = 32; block_sz <= 1024; block_sz += block_sz)
 		{
