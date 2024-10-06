@@ -1,5 +1,9 @@
 #ifndef _MY_COMMON_H_
 #define _MY_COMMON_H_
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <cuda.h>
 
