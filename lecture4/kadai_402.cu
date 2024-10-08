@@ -34,12 +34,10 @@ kern_update_centroid(double *data,
 					 double *centroid_curr,
 					 int    *centroid_nitems)
 {
-	// centroid_curr[M_DIMS * cat] と centroid_curr[M_DIMS * cat + 1] が
-	// カテゴリ(cat=[0...(N_CATEGORY-1)])のX要素とY要素
-
-	// 各要素は data[M_DIMS * index] がX要素、data[M_DIMS * index + 1]が
-	// Y要素となる。
-	for (int i=get_global_id(); i < NITEMS; i += get_global_size())
+	//
+	// XXX - ここでAtomic演算を多用しているが、その影響を減らせないだろうか？
+	//
+	for (int i=threadIdx.x; i < NITEMS; i += blockDim.x)
 	{
 		int		cat = category[i];
 
@@ -56,7 +54,7 @@ __global__ void
 kern_normalize_centroid(double *centroid_curr,
 						int    *centroid_nitems)
 {
-	for (int i=get_global_id(); i < M_DIMS * N_CATEGORY; i += get_global_size())
+	for (int i=threadIdx.x; i < M_DIMS * N_CATEGORY; i += blockDim.x)
 	{
 		int		cat = i / M_DIMS;
 		int		nitems = centroid_nitems[cat];
@@ -73,11 +71,11 @@ kern_update_clusters(double *data,
 					 int    *category,
 					 double *centroid)
 {
-	// 各要素は data[M_DIMS * index] がX要素、data[M_DIMS * index + 1]が
-	// Y要素となり、category[index] が所属しているカテゴリとなる。
-	// つまり、各要素に中心点が最も近いカテゴリを選び、category[]を更新
-	// する事で、各要素の属するクラスタを更新できる。
-	for (int i=get_global_id(); i < NITEMS; i += get_global_size())
+	//
+	// XXX - 各要素ごとに、全てのカテゴリに対してループで距離計算をしているが、
+	//       ここは設計をより最適にする余地はあるだろうか？
+	//
+	for (int i=threadIdx.x; i < NITEMS; i += blockDim.x)
 	{
 		int		cat = -1;
 		double	shortest;
@@ -98,9 +96,8 @@ kern_update_clusters(double *data,
 }
 
 __host__ static void
-print_one_frame(bool is_last)
+print_one_frame(void)
 {
-#if 0
 	static int	frame_count = 0;
 	static const char *colors[] = {
 		"light-blue",
@@ -119,14 +116,12 @@ print_one_frame(bool is_last)
 	// Gnuplotのコマンドを出力(初回のみ)
 	if (frame_count++ == 0)
 	{
-		printf("set terminal gif %s optimize size 600,600\n"
+		printf("set terminal gif animate delay 100 optimize size 600,600\n"
 			   "set out 'kadai_401_anime.gif'\n"
 			   "set title 'k-means (animation)'\n"
 			   "set xlabel 'X0'\n"
 			   "set ylabel 'X1'\n"
-			   "set palette maxcolors %d\n",
-			   is_last ? "" : "animate delay 100",
-			   N_CATEGORY+1);
+			   "set palette maxcolors %d\n", N_CATEGORY+1);
 		printf("set palette defined (");
 		for (int i=0; i < N_CATEGORY && colors[i] != NULL; i++)
 			printf("%d '%s', ", i, colors[i]);
@@ -149,7 +144,6 @@ print_one_frame(bool is_last)
 			   N_CATEGORY);
 	}
 	printf("e\n");
-#endif
 }
 
 int main(int argc, const char *argv[])
@@ -168,7 +162,13 @@ int main(int argc, const char *argv[])
 	for (int i=0; i < NITEMS; i++)
 		category[i] = (int)((double)N_CATEGORY * drand48());
 
-	print_one_frame(false);
+	//
+	// XXX - GPU Kernel関数の起動時、グリッド数やブロックサイズを決め打ちに
+	//       している。本当にこの大きさでよいのか？
+	//       hint: cudaOccupancyMaxPotentialBlockSize(&grid_sz
+	//                                                &block_sz,
+	//                                                kernel_func)
+	//
 
 	// (3) k-means法が収束するまでループ
 	// ---------------------------------
@@ -196,9 +196,6 @@ int main(int argc, const char *argv[])
 		// GPU Kernelの実行待ち
 		cudaStreamSynchronize(NULL);
 
-		// 途中経過を出力
-		print_one_frame(false);
-
 		// (6) クラスタ中心点の移動距離をチェック
 		// --------------------------------------
 		if (loop > 0)
@@ -220,13 +217,7 @@ int main(int argc, const char *argv[])
 	}
 	// (8) 最終状態を出力
 	// ------------------
-	printf("k-means (loops=%d)\n", loop);
-	for (int cat=0; cat < N_CATEGORY; cat++)
-		printf("category[%d] nitems=%d (c0=%f, c1=%f)\n",
-			   cat, centroid_nitems[cat],
-			   centroid_curr[cat * M_DIMS],
-			   centroid_curr[cat * M_DIMS + 1]);
-	print_one_frame(true);
+	//print_one_frame();
 
 	return 0;
 }

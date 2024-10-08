@@ -7,6 +7,11 @@
 #include <unistd.h>
 #include <cuda.h>
 
+#define get_global_id()		(blockDim.x * blockIdx.x + threadIdx.x)
+#define get_global_size()	(blockDim.x * gridDim.x)
+#define get_local_id()		(threadIdx.x)
+#define get_local_size()	(blockDim.x)
+
 /* error handling */
 #define __(stmt)														\
 	do {																\

@@ -1,7 +1,7 @@
 #include "../my_common.h"
 
 #define M_DIMS		2
-#define NITEMS		10000
+#define NITEMS		4000000
 #define N_CATEGORY	5
 #define MAX_LOOPS	30
 #define DIST_THRESHOLD	0.0001
@@ -46,7 +46,7 @@ __global__ void
 kern_normalize_centroid(double *centroid_curr,
 						int    *centroid_nitems)
 {
-	for (int i=threadIdx.x; i < M_DIMS * N_CATEGORY; i += blockDim.x)
+	for (int i=get_global_id(); i < M_DIMS * N_CATEGORY; i += get_global_size())
 	{
 		int		cat = i / M_DIMS;
 		int		nitems = centroid_nitems[cat];
@@ -70,8 +70,9 @@ kern_update_clusters(double *data,
 }
 
 __host__ static void
-print_one_frame(void)
+print_one_frame(bool is_last)
 {
+#if 0
 	static int	frame_count = 0;
 	static const char *colors[] = {
 		"light-blue",
@@ -90,12 +91,14 @@ print_one_frame(void)
 	// Gnuplotのコマンドを出力(初回のみ)
 	if (frame_count++ == 0)
 	{
-		printf("set terminal gif animate delay 100 optimize size 600,600\n"
+		printf("set terminal gif %s optimize size 600,600\n"
 			   "set out 'kadai_401_anime.gif'\n"
 			   "set title 'k-means (animation)'\n"
 			   "set xlabel 'X0'\n"
 			   "set ylabel 'X1'\n"
-			   "set palette maxcolors %d\n", N_CATEGORY+1);
+			   "set palette maxcolors %d\n",
+			   is_last ? "" : "animate delay 100",
+			   N_CATEGORY+1);
 		printf("set palette defined (");
 		for (int i=0; i < N_CATEGORY && colors[i] != NULL; i++)
 			printf("%d '%s', ", i, colors[i]);
@@ -118,6 +121,7 @@ print_one_frame(void)
 			   N_CATEGORY);
 	}
 	printf("e\n");
+#endif
 }
 
 int main(int argc, const char *argv[])
@@ -135,6 +139,8 @@ int main(int argc, const char *argv[])
 	// ----------------------------------------
 	for (int i=0; i < NITEMS; i++)
 		category[i] = (int)((double)N_CATEGORY * drand48());
+
+	print_one_frame(false);
 
 	// (3) k-means法が収束するまでループ
 	// ---------------------------------
@@ -154,6 +160,9 @@ int main(int argc, const char *argv[])
 
 		// GPU Kernelの実行待ち
 		cudaStreamSynchronize(NULL);
+
+		// 途中経過を出力
+		print_one_frame(false);
 
 		// (6) クラスタ中心点の移動距離をチェック
 		// --------------------------------------
@@ -176,7 +185,13 @@ int main(int argc, const char *argv[])
 	}
 	// (8) 最終状態を出力
 	// ------------------
-	print_one_frame();
+	printf("k-means (loops=%d)\n", loop);
+	for (int cat=0; cat < N_CATEGORY; cat++)
+		printf("category[%d] nitems=%d (c0=%f, c1=%f)\n",
+			   cat, centroid_nitems[cat],
+			   centroid_curr[cat * M_DIMS],
+			   centroid_curr[cat * M_DIMS + 1]);
+	print_one_frame(true);
 
 	return 0;
 }
