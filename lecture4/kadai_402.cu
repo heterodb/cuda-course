@@ -34,10 +34,15 @@ kern_update_centroid(double *data,
 					 double *centroid_curr,
 					 int    *centroid_nitems)
 {
+	// centroid_curr[M_DIMS * cat] と centroid_curr[M_DIMS * cat + 1] が
+	// カテゴリ(cat=[0...(N_CATEGORY-1)])のX要素とY要素
+	//
+	// 各要素は data[M_DIMS * index] がX要素、data[M_DIMS * index + 1]が
+	// Y要素となる。
 	//
 	// XXX - ここでAtomic演算を多用しているが、その影響を減らせないだろうか？
 	//
-	for (int i=threadIdx.x; i < NITEMS; i += blockDim.x)
+	for (int i=get_global_id(); i < NITEMS; i += get_global_size())
 	{
 		int		cat = category[i];
 
@@ -54,7 +59,7 @@ __global__ void
 kern_normalize_centroid(double *centroid_curr,
 						int    *centroid_nitems)
 {
-	for (int i=threadIdx.x; i < M_DIMS * N_CATEGORY; i += blockDim.x)
+	for (int i=get_global_id(); i < M_DIMS * N_CATEGORY; i += get_global_size())
 	{
 		int		cat = i / M_DIMS;
 		int		nitems = centroid_nitems[cat];
@@ -71,11 +76,15 @@ kern_update_clusters(double *data,
 					 int    *category,
 					 double *centroid)
 {
+	// 各要素は data[M_DIMS * index] がX要素、data[M_DIMS * index + 1]が
+	// Y要素となり、category[index] が所属しているカテゴリとなる。
+	// つまり、各要素に中心点が最も近いカテゴリを選び、category[]を更新
+	// する事で、各要素の属するクラスタを更新できる。
 	//
 	// XXX - 各要素ごとに、全てのカテゴリに対してループで距離計算をしているが、
 	//       ここは設計をより最適にする余地はあるだろうか？
 	//
-	for (int i=threadIdx.x; i < NITEMS; i += blockDim.x)
+	for (int i=get_global_id(); i < NITEMS; i += get_global_size())
 	{
 		int		cat = -1;
 		double	shortest;
@@ -98,6 +107,7 @@ kern_update_clusters(double *data,
 __host__ static void
 print_one_frame(void)
 {
+#if 0
 	static int	frame_count = 0;
 	static const char *colors[] = {
 		"light-blue",
@@ -120,8 +130,7 @@ print_one_frame(void)
 			   "set out 'kadai_401_anime.gif'\n"
 			   "set title 'k-means (animation)'\n"
 			   "set xlabel 'X0'\n"
-			   "set ylabel 'X1'\n"
-			   "set palette maxcolors %d\n", N_CATEGORY+1);
+			   "set ylabel 'X1'\n");
 		printf("set palette defined (");
 		for (int i=0; i < N_CATEGORY && colors[i] != NULL; i++)
 			printf("%d '%s', ", i, colors[i]);
@@ -144,6 +153,7 @@ print_one_frame(void)
 			   N_CATEGORY);
 	}
 	printf("e\n");
+#endif
 }
 
 int main(int argc, const char *argv[])
@@ -174,6 +184,9 @@ int main(int argc, const char *argv[])
 	// ---------------------------------
 	for (loop=0; loop < MAX_LOOPS; loop++)
 	{
+		// 途中経過を出力
+		print_one_frame();
+
 		// (4) クラスタ中心点の更新
 		// ------------------------
 		memset(centroid_curr,   0, sizeof(centroid_curr));
@@ -217,7 +230,12 @@ int main(int argc, const char *argv[])
 	}
 	// (8) 最終状態を出力
 	// ------------------
-	//print_one_frame();
-
+	print_one_frame();
+	fprintf(stderr, "k-means (loops=%d)\n", loop);
+	for (int cat=0; cat < N_CATEGORY; cat++)
+		fprintf(stderr, "category[%d] nitems=%d (c0=%f, c1=%f)\n",
+				cat, centroid_nitems[cat],
+				centroid_curr[cat * M_DIMS],
+				centroid_curr[cat * M_DIMS + 1]);
 	return 0;
 }

@@ -1,7 +1,7 @@
 #include "../my_common.h"
 
 #define M_DIMS		2
-#define NITEMS		4000000
+#define NITEMS		1000
 #define N_CATEGORY	5
 #define MAX_LOOPS	30
 #define DIST_THRESHOLD	0.0001
@@ -34,49 +34,20 @@ kern_update_centroid(double *data,
 					 double *centroid_curr,
 					 int    *centroid_nitems)
 {
-	__shared__ double __our_nitems[N_CATEGORY];
-	__shared__ double __our_centroid[M_DIMS * N_CATEGORY];
-	double	__my_nitems[N_CATEGORY];
-	double	__my_centroid[M_DIMS * N_CATEGORY];
-
-	// shared/private変数の初期化
-	memset(__my_nitems,   0, sizeof(__my_nitems));
-	memset(__my_centroid, 0, sizeof(__my_centroid));
-	for (int i=get_local_id(); i <  M_DIMS * N_CATEGORY; i += get_local_size())
-	{
-		__our_centroid[i] = 0.0;
-		if (i < N_CATEGORY)
-			__our_nitems[i] = 0;
-	}
-	__syncthreads();
-
-	// private変数上でクラスタ中心点を収集
-	for (int i=get_global_id(); i < NITEMS; i+= get_global_size())
+	// centroid_curr[M_DIMS * cat] と centroid_curr[M_DIMS * cat + 1] が
+	// カテゴリ(cat=[0...(N_CATEGORY-1)])のX要素とY要素
+	//
+	// 各要素は data[M_DIMS * index] がX要素、data[M_DIMS * index + 1]が
+	// Y要素となる。
+	for (int i=get_global_id(); i < NITEMS; i += get_global_size())
 	{
 		int		cat = category[i];
 
 		assert(cat >= 0 && cat < N_CATEGORY);
-		__my_nitems[cat] += 1;
+		atomicAdd(&centroid_nitems[cat], 1);
 		for (int m=0; m < M_DIMS; m++)
-			__my_centroid[M_DIMS * cat + m] += data[M_DIMS * i + m];
-	}
-	// private変数上での集計結果を、sharedメモリに移動
-	// atomic演算だが、sharedメモリ上なので10倍ほど速い
-	for (int cat=0; cat < N_CATEGORY; cat++)
-	{
-		atomicAdd(&__our_nitems[cat], __my_nitems[cat]);
-		for (int j=0; j < M_DIMS; j++)
-			atomicAdd(&__our_centroid[cat * M_DIMS + j],
-					  __my_centroid[cat * M_DIMS + j]);
-	}
-	__syncthreads();
-	// 同一ブロック内の他のスレッドの実行終了を待って、
-	// 共有メモリの内容をGlobalメモリに書き出す。
-	for (int i=get_local_id(); i < M_DIMS * N_CATEGORY; i += get_local_size())
-	{
-		atomicAdd(&centroid_curr[i], __our_centroid[i]);
-		if (i < N_CATEGORY)
-			atomicAdd(&centroid_nitems[i], __our_nitems[i]);
+			atomicAdd(&centroid_curr[M_DIMS * cat + m],
+					  data[M_DIMS * i + m]);
 	}
 }
 
@@ -102,6 +73,10 @@ kern_update_clusters(double *data,
 					 int    *category,
 					 double *centroid)
 {
+	// 各要素は data[M_DIMS * index] がX要素、data[M_DIMS * index + 1]が
+	// Y要素となり、category[index] が所属しているカテゴリとなる。
+	// つまり、各要素に中心点が最も近いカテゴリを選び、category[]を更新
+	// する事で、各要素の属するクラスタを更新できる。
 	for (int i=get_global_id(); i < NITEMS; i += get_global_size())
 	{
 		int		cat = -1;
@@ -125,7 +100,7 @@ kern_update_clusters(double *data,
 __host__ static void
 print_one_frame(void)
 {
-#if 0
+#if 1
 	static int	frame_count = 0;
 	static const char *colors[] = {
 		"light-blue",
@@ -158,6 +133,7 @@ print_one_frame(void)
 	printf("plot '-' with points palette pointsize 1 pointtype 7\n");
 	for (int i=0; i < NITEMS; i++)
 	{
+		assert(category[i] >= 0 && category[i] < N_CATEGORY);
 		printf("%f %f %d\n",
 			   data[i*M_DIMS],
 			   data[i*M_DIMS+1],
@@ -176,14 +152,6 @@ print_one_frame(void)
 
 int main(int argc, const char *argv[])
 {
-	int		centroid_grid_sz;
-	int		centroid_block_sz;
-	int		normalize_grid_sz;
-	int		normalize_block_sz;
-	int		cluster_grid_sz;
-	int		cluster_block_sz;
-	int		gpu_dindex;
-	int		sm_count;
 	int		loop;
 
 	// (1) data[] 配列の初期化
@@ -198,27 +166,6 @@ int main(int argc, const char *argv[])
 	for (int i=0; i < NITEMS; i++)
 		category[i] = (int)((double)N_CATEGORY * drand48());
 
-	// cudaOccupancyMaxPotentialBlockSize を用いた
-	// 推奨ブロックサイズの計算
-	// ここでは、グリッド数が多すぎる場合はGPUのSM数まで切り下げる。
-	__(cudaGetDevice(&gpu_dindex));
-	__(cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, gpu_dindex));
-	__(cudaOccupancyMaxPotentialBlockSize(&centroid_grid_sz,
-										  &centroid_block_sz,
-										  kern_update_centroid));
-	if (centroid_grid_sz > sm_count)
-		centroid_grid_sz = sm_count;
-	__(cudaOccupancyMaxPotentialBlockSize(&normalize_grid_sz,
-										  &normalize_block_sz,
-										  kern_normalize_centroid));
-	if (normalize_grid_sz > 1)
-		normalize_grid_sz = 1;
-	__(cudaOccupancyMaxPotentialBlockSize(&cluster_grid_sz,
-										  &cluster_block_sz,
-										  kern_update_clusters));
-	if (cluster_grid_sz > sm_count)
-		cluster_grid_sz = sm_count;
-
 	// (3) k-means法が収束するまでループ
 	// ---------------------------------
 	for (loop=0; loop < MAX_LOOPS; loop++)
@@ -231,23 +178,20 @@ int main(int argc, const char *argv[])
 		memset(centroid_curr,   0, sizeof(centroid_curr));
 		memset(centroid_nitems, 0, sizeof(centroid_nitems));
 
-		kern_update_centroid<<<centroid_grid_sz,
-							   centroid_block_sz>>>(data,
-													category,
-													centroid_curr,
-													centroid_nitems);
+		kern_update_centroid<<<8,512>>>(data,
+										category,
+										centroid_curr,
+										centroid_nitems);
 		// クラスタ中心点の標準化
 		// centroid_curr(合計値) と centroid_nitems(件数) から、
 		// 平均値を導出する
-		kern_normalize_centroid<<<normalize_grid_sz,
-								  normalize_block_sz>>>(centroid_curr,
-														centroid_nitems);
+		kern_normalize_centroid<<<1,256>>>(centroid_curr,
+										   centroid_nitems);
 		// (5) 各要素の属するクラスタを更新する
 		// ------------------------------------
-		kern_update_clusters<<<cluster_grid_sz,
-							   cluster_block_sz>>>(data,
-												   category,
-												   centroid_curr);
+		kern_update_clusters<<<8,512>>>(data,
+										category,
+										centroid_curr);
 		// GPU Kernelの実行待ち
 		cudaStreamSynchronize(NULL);
 

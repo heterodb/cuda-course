@@ -36,7 +36,7 @@ kern_update_centroid(double *data,
 {
 	// centroid_curr[M_DIMS * cat] と centroid_curr[M_DIMS * cat + 1] が
 	// カテゴリ(cat=[0...(N_CATEGORY-1)])のX要素とY要素
-
+	//
 	// 各要素は data[M_DIMS * index] がX要素、data[M_DIMS * index + 1]が
 	// Y要素となる。
 	for (int i=get_global_id(); i < NITEMS; i += get_global_size())
@@ -98,7 +98,7 @@ kern_update_clusters(double *data,
 }
 
 __host__ static void
-print_one_frame(bool is_last)
+print_one_frame(void)
 {
 #if 0
 	static int	frame_count = 0;
@@ -119,14 +119,11 @@ print_one_frame(bool is_last)
 	// Gnuplotのコマンドを出力(初回のみ)
 	if (frame_count++ == 0)
 	{
-		printf("set terminal gif %s optimize size 600,600\n"
+		printf("set terminal gif animate delay 100 optimize size 600,600\n"
 			   "set out 'kadai_401_anime.gif'\n"
 			   "set title 'k-means (animation)'\n"
 			   "set xlabel 'X0'\n"
-			   "set ylabel 'X1'\n"
-			   "set palette maxcolors %d\n",
-			   is_last ? "" : "animate delay 100",
-			   N_CATEGORY+1);
+			   "set ylabel 'X1'\n");
 		printf("set palette defined (");
 		for (int i=0; i < N_CATEGORY && colors[i] != NULL; i++)
 			printf("%d '%s', ", i, colors[i]);
@@ -168,12 +165,13 @@ int main(int argc, const char *argv[])
 	for (int i=0; i < NITEMS; i++)
 		category[i] = (int)((double)N_CATEGORY * drand48());
 
-	print_one_frame(false);
-
 	// (3) k-means法が収束するまでループ
 	// ---------------------------------
 	for (loop=0; loop < MAX_LOOPS; loop++)
 	{
+		// 途中経過を出力
+		print_one_frame();
+
 		// (4) クラスタ中心点の更新
 		// ------------------------
 		memset(centroid_curr,   0, sizeof(centroid_curr));
@@ -196,9 +194,6 @@ int main(int argc, const char *argv[])
 		// GPU Kernelの実行待ち
 		cudaStreamSynchronize(NULL);
 
-		// 途中経過を出力
-		print_one_frame(false);
-
 		// (6) クラスタ中心点の移動距離をチェック
 		// --------------------------------------
 		if (loop > 0)
@@ -220,13 +215,12 @@ int main(int argc, const char *argv[])
 	}
 	// (8) 最終状態を出力
 	// ------------------
-	printf("k-means (loops=%d)\n", loop);
+	print_one_frame();
+	fprintf(stderr, "k-means (loops=%d)\n", loop);
 	for (int cat=0; cat < N_CATEGORY; cat++)
-		printf("category[%d] nitems=%d (c0=%f, c1=%f)\n",
-			   cat, centroid_nitems[cat],
-			   centroid_curr[cat * M_DIMS],
-			   centroid_curr[cat * M_DIMS + 1]);
-	print_one_frame(true);
-
+		fprintf(stderr, "category[%d] nitems=%d (c0=%f, c1=%f)\n",
+				cat, centroid_nitems[cat],
+				centroid_curr[cat * M_DIMS],
+				centroid_curr[cat * M_DIMS + 1]);
 	return 0;
 }
