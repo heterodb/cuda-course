@@ -7,10 +7,14 @@
 #include <unistd.h>
 #include <cuda.h>
 
+#define get_global_base()	(blockDim.x * blockIdx.x)
 #define get_global_id()		(blockDim.x * blockIdx.x + threadIdx.x)
 #define get_global_size()	(blockDim.x * gridDim.x)
 #define get_local_id()		(threadIdx.x)
 #define get_local_size()	(blockDim.x)
+#define WARP_SIZE			32
+#define Min(x,y)			((x)<(y) ? (x) : (y))
+#define Max(x,y)			((x)>(y) ? (x) : (y))
 
 /* error handling */
 #define __(stmt)														\
