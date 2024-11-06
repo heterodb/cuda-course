@@ -16,17 +16,17 @@
 				errname = "Unknown CUDA Error";							\
 																		\
 			fprintf(stderr,												\
-					"[%s:%d] failed on " #stmt " = %s\n",				\
+					"[%s:%d] failed on %s = %s\n",						\
 					__FILE__, __LINE__,									\
-					errname);											\
+					#stmt, errname);									\
 			_exit(1);													\
 		}																\
 		else if (IS_CUFILE_ERR(__rc.err))								\
 		{																\
 			fprintf(stderr,												\
-					"[%s:%d] failed on " #stmt " = %s\n"				\
+					"[%s:%d] failed on %s = %s\n",						\
 					__FILE__, __LINE__,									\
-					CUFILE_ERRSTR(__rc.err));							\
+					#stmt, CUFILE_ERRSTR(__rc.err));					\
 			_exit(1);													\
 		}																\
     } while(0)
@@ -138,8 +138,8 @@ int main(int argc, char *argv[])
 		printf("==== file: %s histogram ========\n", argv[i]);
 		for (int k=0; k < 256; k+=16)
 		{
-			printf("% 4u % 4u % 4u % 4u % 4u % 4u % 4u % 4u    "
-				   "% 4u % 4u % 4u % 4u % 4u % 4u % 4u % 4u\n",
+			printf("% 4d % 4d % 4d % 4d % 4d % 4d % 4d % 4d    "
+				   "% 4d % 4d % 4d % 4d % 4d % 4d % 4d % 4d\n",
 				   hist_buf[k],    hist_buf[k+1],  hist_buf[k+2],  hist_buf[k+3],
 				   hist_buf[k+4],  hist_buf[k+5],  hist_buf[k+6],  hist_buf[k+7],
 				   hist_buf[k+8],  hist_buf[k+9],  hist_buf[k+10], hist_buf[k+11],
